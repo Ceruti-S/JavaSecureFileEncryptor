@@ -1,4 +1,4 @@
-package com.appCifratura.backend.motoreCifratura;
+package com.appCifratura.backend.gestoreDati;
 
 import java.io.Serializable;
 import java.security.PrivateKey;

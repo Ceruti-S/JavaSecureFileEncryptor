@@ -1,4 +1,9 @@
-package com.appCifratura.backend.motoreCifratura;
+package com.appCifratura.frontend;
+
+import com.appCifratura.backend.motoreCifratura.Cifratore;
+import com.appCifratura.backend.gestoreDati.DatabaseChiavi;
+import com.appCifratura.backend.motoreCifratura.Decifratore;
+import com.appCifratura.backend.gestoreDati.GestoreIdentita;
 
 import javax.swing.*;
 import java.awt.*;

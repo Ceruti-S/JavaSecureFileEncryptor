@@ -1,4 +1,4 @@
-package com.appCifratura.backend.motoreCifratura;
+package com.appCifratura.backend.gestoreDati;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
