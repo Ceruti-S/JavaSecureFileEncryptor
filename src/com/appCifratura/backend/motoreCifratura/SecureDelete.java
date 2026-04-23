@@ -3,50 +3,73 @@ package com.appCifratura.backend.motoreCifratura;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 public class SecureDelete
 {
 
-    //questo metodo esegue il secure-delete di un file che gli si passa, ovvero lo sovrascrive totalmente con dati randomici,
-    //lo rinomina randomicamente e poi lo elimina effettivamente
-    public static void eseguiSecureDelete(File file) throws Exception {
+    private static final int BUFFER_SIZE = 4 * 1024 * 1024;
 
-        //se il file non esiste returno o se non posso scriverlo
-        if (!file.exists() || !file.canWrite())
+    private static final int OVERWRITE_PASSES = 4;
+
+    public static void eseguiSecureDelete(File file) throws Exception
+    {
+
+        if(!file.exists() || !file.canWrite())
             return;
 
-        long length = file.length();
-        SecureRandom random = new SecureRandom();
+        final long length = file.length();
+        final SecureRandom random = new SecureRandom();
 
-        //sovrascrivo il vecchio file con byte fittizzi
-        try (RandomAccessFile raf = new RandomAccessFile(file, "rws"))
+        try(RandomAccessFile raf = new RandomAccessFile(file, "rws"))
         {
 
-            //aumento la dimensione del buffer a 1MB per compensare l'overhead del SecureRandom
-            byte[] data = new byte[4 * (1024 * 1024)];
-            long currentPos = 0;
-
-            while (currentPos < length)
+            for(int pass = 0; pass < OVERWRITE_PASSES; pass++)
             {
 
-                random.nextBytes(data);
+                raf.seek(0);
+                long currentPos = 0;
 
-                int toWrite = (int) Math.min(data.length, length - currentPos);
-                raf.write(data, 0, toWrite);
-                currentPos += toWrite;
+                byte[] data = new byte[(int) Math.min(BUFFER_SIZE, Math.max(length, 1))];
+
+                while(currentPos < length)
+                {
+
+                    if(pass % 2 == 0)
+                    {
+
+                        random.nextBytes(data);
+
+                    }
+                    else
+                    {
+
+                        byte fillByte = ((pass / 2) % 2 == 0) ? (byte) 0x00 : (byte) 0xFF;
+                        Arrays.fill(data, fillByte);
+
+                    }
+
+                    int toWrite = (int) Math.min(data.length, length - currentPos);
+                    raf.write(data, 0, toWrite);
+                    currentPos += toWrite;
+
+                }
+
+                raf.getFD().sync();
+
+                Arrays.fill(data, (byte) 0);
 
             }
 
-            //forzo la scrittura dei dati sul disco
+            raf.setLength(0);
             raf.getFD().sync();
 
         }
 
-        //rinomino in maniera casuale il file sorgente
-        String nomeCasuale = "temp_" + System.nanoTime() + ".tmp";
+        String nomeCasuale = "tmp_" + System.nanoTime() + "_" + Thread.currentThread().getId() + ".del";
         File fileDaEliminare = new File(file.getParent(), nomeCasuale);
 
-        if (file.renameTo(fileDaEliminare))
+        if(file.renameTo(fileDaEliminare))
         {
 
             try

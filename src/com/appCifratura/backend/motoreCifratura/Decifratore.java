@@ -17,7 +17,7 @@ public class Decifratore
     private static final int BUFFER_SIZE = 8192;
 
     //questo metodo fa la stessa cosa della sua controparte di CIfratore.java ma all'esatto contrario e prende la privateKey dell'rsa
-    public static void decifraFile(File fileCifrato, PrivateKey rsaPrivateKey, boolean secureDelete) throws Exception
+    public static void decifraFile(File fileCifrato, PrivateKey rsaPrivateKey, boolean secureDelete, ProgressListener listener) throws Exception
     {
 
         try(DataInputStream dis = new DataInputStream(new FileInputStream(fileCifrato)))
@@ -61,6 +61,9 @@ public class Decifratore
             Cipher fileCipher = Cipher.getInstance("AES/GCM/NoPadding");
             fileCipher.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(128, ivFile));
 
+            long totalSize = fileCifrato.length();
+            long currentRead = 0;
+
             //preparo il file di destinazione decifrato
             File fileRipristinato = new File(fileCifrato.getParent(), nomeOriginale);
 
@@ -78,12 +81,28 @@ public class Decifratore
                     if(output != null)
                         fos.write(output);
 
+                    currentRead += bytesRead;
+                    if(listener!=null)
+                    {
+
+                        int progress = (int)((currentRead*100)/totalSize);
+                        listener.onProgress(Math.min(progress, 100));
+
+                    }
+
                 }
 
                 //controllo l'integrità del file col tag GCM
                 byte[] finalBytes = fileCipher.doFinal();
                 if(finalBytes != null)
                     fos.write(finalBytes);
+
+                if(listener!=null)
+                {
+
+                    listener.onProgress(100);
+
+                }
 
             }
             catch(Exception e)
@@ -100,6 +119,13 @@ public class Decifratore
         //se l'utente lo ha selezionato, faccio il secure-delete del file cifrato
         if(secureDelete)
             eseguiSecureDelete(fileCifrato);
+
+    }
+
+    public interface ProgressListener
+    {
+
+        void onProgress(int percentage);
 
     }
 

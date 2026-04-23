@@ -26,7 +26,7 @@ public class Cifratore
     //su "fileDestinazione", prende in ingresso anche la publickey rsa per cifrare la chiave aes-256 e un boolean che se è true
     //il programma farà il safe-delete del file sorgente dopo aver cifrato
     // /!\il programma CREA il file criptato quindi non deve già esistere sul percorso dove viene salvato altrimenti verrà sovrascritto quello già presente
-    public static File criptaFile(File fileSorgente, PublicKey rsaPublicKey, boolean secureDelete) throws Exception
+    public static File criptaFile(File fileSorgente, PublicKey rsaPublicKey, boolean secureDelete, ProgressListener listener) throws Exception
     {
 
         //creo il nome anonimo del file criptato
@@ -90,12 +90,23 @@ public class Cifratore
                 //cifro a pezzi il file per non mandare in overflow la RAM
                 byte[] buffer = new byte[BUFFER_SIZE];
                 int bytesRead;
+                long totalSize = fileSorgente.length();
+                long totalRead = 0;
                 while((bytesRead = fis.read(buffer)) != -1)
                 {
 
                     byte[] output = fileCipher.update(buffer, 0, bytesRead);
                     if(output != null)
                         dos.write(output);
+
+                    totalRead += bytesRead;
+                    if(listener!=null)
+                    {
+
+                        int progress = (int)((totalRead*100) / totalSize);
+                        listener.onProgress(progress);
+
+                    }
 
                 }
 
@@ -126,6 +137,13 @@ public class Cifratore
             eseguiSecureDelete(fileSorgente);
 
         return fileDestinazione; //returno il file criptato almeno posso sapere come lo ho salvato sul disco
+
+    }
+
+    public interface ProgressListener
+    {
+
+        void onProgress(int percentage);
 
     }
 
