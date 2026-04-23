@@ -23,5 +23,5 @@ Un'applicazione desktop robusta per la cifratura di file e la gestione sicura de
 
 * **Utilizza i file e le istruzioni nel tag (releases) più recente già preparato**
 
-**/!\ATTENZIONE/!\**
+/!\ATTENZIONE/!\
 * Al primo avvio dell'applicazione vi verrà richiesta una password, sceglietene una a vostra scelta ma che sia SICURA e ricordatevela perché vi verrà chiesta da quel momento in poi per accedere all'app. 
