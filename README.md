@@ -21,4 +21,4 @@ Un'applicazione desktop robusta per la cifratura di file e la gestione sicura de
 
 ## Installazione
 
-1. **Utilizza i file nei tag già preparati**
+1. **Utilizza i file nei tag (releases) già preparati**
