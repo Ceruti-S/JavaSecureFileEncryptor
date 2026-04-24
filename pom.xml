@@ -36,7 +36,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.appCifratura.INSERISCI_QUI_IL_NOME_DELLA_CLASSE_MAIN</mainClass>
+                            <mainClass>com.appCifratura.frontend.AppGUI</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
