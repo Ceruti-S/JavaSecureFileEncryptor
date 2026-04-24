@@ -1,16 +1,20 @@
 package com.appCifratura.frontend;
 
+import com.appCifratura.backend.gestorePassword.Generator;
 import com.appCifratura.backend.motoreCifratura.Cifratore;
 import com.appCifratura.backend.gestoreDati.DatabaseChiavi;
 import com.appCifratura.backend.motoreCifratura.Decifratore;
 import com.appCifratura.backend.gestoreDati.GestoreIdentita;
 
 import javax.swing.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.io.File;
 import java.nio.file.Files;
 import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
@@ -111,10 +115,53 @@ public class AppGUI extends JFrame
     private boolean richiediAccesso()
     {
 
-        JPasswordField pf = new JPasswordField();
-        int okCxl = JOptionPane.showConfirmDialog(null, pf, "Inserisci Master Password", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        JPasswordField pf = new JPasswordField(30);
+        pf.setFont(new Font("Arial", Font.PLAIN, 18));
+        pf.setEchoChar('●');
 
-        if (okCxl == JOptionPane.OK_OPTION)
+        JButton btnOcchio = new JButton("vedi");
+        btnOcchio.setFocusable(false);
+        btnOcchio.setFont(new Font("Arial", Font.PLAIN, 18));
+        btnOcchio.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        btnOcchio.addMouseListener(new java.awt.event.MouseAdapter()
+        {
+
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e)
+            {
+
+                pf.setEchoChar((char) 0);
+
+            }
+
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e)
+            {
+
+                pf.setEchoChar('●');
+
+            }
+
+        });
+
+        JPanel passContainer = new JPanel(new BorderLayout(5, 0));
+        passContainer.add(pf, BorderLayout.CENTER);
+        passContainer.add(btnOcchio, BorderLayout.EAST);
+
+        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JLabel label = new JLabel("Inserisci la Master Password:");
+        label.setFont(new Font("Arial", Font.BOLD, 14));
+
+        mainPanel.add(label, BorderLayout.NORTH);
+        mainPanel.add(passContainer, BorderLayout.CENTER);
+
+        int okCxl = JOptionPane.showConfirmDialog(this, mainPanel, "Accesso Protetto",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if(okCxl == JOptionPane.OK_OPTION)
         {
 
             masterPassword = pf.getPassword();
@@ -129,8 +176,10 @@ public class AppGUI extends JFrame
 
                     JOptionPane.showMessageDialog(this, "Nessuna identità trovata. Generazione nuove chiavi RSA-4096...", "Prima Configurazione", JOptionPane.INFORMATION_MESSAGE);
                     KeyPair kp = GestoreIdentita.generaNuovaIdentita();
-                    db.miaChiavePrivata = kp.getPrivate();
-                    db.miaChiavePubblica = kp.getPublic();
+
+                    db.miaChiavePrivata = kp.getPrivate().getEncoded();
+                    db.miaChiavePubblica = kp.getPublic().getEncoded();
+
                     GestoreIdentita.salvaDatabase(db, masterPassword);
 
                 }
@@ -211,73 +260,111 @@ public class AppGUI extends JFrame
 
         });
 
-        btnCifra.addActionListener(e ->
+        try
         {
 
-            if (fileDaCifrare[0] == null)
-                return;
-
-            String contattoSel = (String) comboContatti.getSelectedItem();
-            PublicKey chiaveDest = (contattoSel.equals("Me Stesso (Mia Chiave)"))
-                    ? db.miaChiavePubblica : db.rubricaContatti.get(contattoSel);
-
-            btnCifra.setEnabled(false);
-            progressBar.setValue(0);
-            progressBar.setVisible(true);
-
-            SwingWorker<File, Integer> worker = new SwingWorker<>()
+            btnCifra.addActionListener(e ->
             {
 
-                @Override
-                protected File doInBackground() throws Exception
+                if (fileDaCifrare[0] == null)
+                    return;
+
+                String contattoSel = (String) comboContatti.getSelectedItem();
+
+                PublicKey chiaveDest;
+
+                try
                 {
 
-                    return Cifratore.criptaFile(fileDaCifrare[0], chiaveDest, chkSafeDelete.isSelected(),
-                            progress -> publish(progress));
-
-                }
-
-                @Override
-                protected void process(java.util.List<Integer> chunks)
-                {
-
-                    int lastValue = chunks.get(chunks.size() - 1);
-                    progressBar.setValue(lastValue);
-
-                }
-
-                @Override
-                protected void done()
-                {
-
-                    try
+                    if(contattoSel.equals("Me Stesso (Mia Chiave)"))
                     {
 
-                        File risultato = get(); // Ottiene il file prodotto o lancia eccezione
-                        JOptionPane.showMessageDialog(AppGUI.this, "Operazione completata!");
+                        KeyFactory kf = KeyFactory.getInstance("RSA");
+                        chiaveDest = kf.generatePublic(new X509EncodedKeySpec(db.miaChiavePubblica));
 
                     }
-                    catch(Exception ex)
+                    else
                     {
 
-                        JOptionPane.showMessageDialog(AppGUI.this, "Errore: " + ex.getCause().getMessage());
-
-                    }
-                    finally
-                    {
-
-                        btnCifra.setEnabled(true);
-                        progressBar.setVisible(false);
+                        byte[] keyBytes = db.rubricaContatti.get(contattoSel);
+                        chiaveDest = GestoreIdentita.convertiByteInChiavePubblica(keyBytes);
 
                     }
 
                 }
+                catch(Exception exe)
+                {
 
-            };
+                    JOptionPane.showMessageDialog(this, "Errore chiave: " + exe.getMessage());
+                    return;
 
-            worker.execute();
+                }
 
-        });
+                btnCifra.setEnabled(false);
+                progressBar.setValue(0);
+                progressBar.setVisible(true);
+
+                SwingWorker<File, Integer> worker = new SwingWorker<>()
+                {
+
+                    @Override
+                    protected File doInBackground() throws Exception
+                    {
+
+                        return Cifratore.criptaFile(fileDaCifrare[0], chiaveDest, chkSafeDelete.isSelected(),
+                                progress -> publish(progress));
+
+                    }
+
+                    @Override
+                    protected void process(java.util.List<Integer> chunks)
+                    {
+
+                        int lastValue = chunks.get(chunks.size() - 1);
+                        progressBar.setValue(lastValue);
+
+                    }
+
+                    @Override
+                    protected void done()
+                    {
+
+                        try
+                        {
+
+                            File risultato = get(); // Ottiene il file prodotto o lancia eccezione
+                            JOptionPane.showMessageDialog(AppGUI.this, "Operazione completata!");
+
+                        }
+                        catch(Exception ex)
+                        {
+
+                            JOptionPane.showMessageDialog(AppGUI.this, "Errore: " + ex.getCause().getMessage());
+
+                        }
+                        finally
+                        {
+
+                            btnCifra.setEnabled(true);
+                            progressBar.setVisible(false);
+
+                        }
+
+                    }
+
+                };
+
+                worker.execute();
+
+            });
+
+        }
+        catch(Exception e)
+        {
+
+            e.printStackTrace();
+
+        }
 
         JPanel rigaContatti = new JPanel(new BorderLayout(5, 0));
         rigaContatti.add(new JLabel("Destinatario: "), BorderLayout.WEST);
@@ -349,7 +436,9 @@ public class AppGUI extends JFrame
                 protected Void doInBackground() throws Exception
                 {
 
-                    Decifratore.decifraFile(fileDaDecifrare[0], db.miaChiavePrivata, chkSafeDelete.isSelected(),
+                    PrivateKey privKey = GestoreIdentita.convertiByteInChiavePrivata(db.miaChiavePrivata);
+
+                    Decifratore.decifraFile(fileDaDecifrare[0], privKey, chkSafeDelete.isSelected(),
                             progress -> publish(progress));
                     return null;
 
@@ -422,7 +511,7 @@ public class AppGUI extends JFrame
             saver.setSelectedFile(new File("mia_chiave.pub"));
             if (saver.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
                 try {
-                    String b64Key = Base64.getEncoder().encodeToString(db.miaChiavePubblica.getEncoded());
+                    String b64Key = Base64.getEncoder().encodeToString(db.miaChiavePubblica);
                     Files.writeString(saver.getSelectedFile().toPath(), b64Key);
                     JOptionPane.showMessageDialog(this, "Chiave esportata correttamente!");
                 } catch (Exception ex) {
@@ -445,8 +534,8 @@ public class AppGUI extends JFrame
             if (conferma == JOptionPane.YES_OPTION) {
                 try {
                     KeyPair kp = GestoreIdentita.generaNuovaIdentita();
-                    db.miaChiavePrivata = kp.getPrivate();
-                    db.miaChiavePubblica = kp.getPublic();
+                    db.miaChiavePrivata = kp.getPrivate().getEncoded();
+                    db.miaChiavePubblica = kp.getPublic().getEncoded();
                     GestoreIdentita.salvaDatabase(db, masterPassword);
                     JOptionPane.showMessageDialog(this, "Nuova identità generata e salvata.");
                 } catch (Exception ex) {
@@ -496,7 +585,7 @@ public class AppGUI extends JFrame
                 KeyFactory kf = KeyFactory.getInstance("RSA");
                 PublicKey pubKey = kf.generatePublic(spec);
 
-                db.rubricaContatti.put(nome, pubKey);
+                db.rubricaContatti.put(nome, pubKey.getEncoded());
                 GestoreIdentita.salvaDatabase(db, masterPassword);
 
                 // Sincronizza le liste grafiche
@@ -562,16 +651,63 @@ public class AppGUI extends JFrame
     private void mostraDialogoCambioPassword()
     {
 
-        JPanel p = new JPanel(new GridLayout(3, 2, 5, 5));
-        JPasswordField oldP = new JPasswordField();
-        JPasswordField newP = new JPasswordField();
-        JPasswordField confP = new JPasswordField();
+        JPanel p = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.weightx = 1.0;
 
-        p.add(new JLabel("Password Attuale:")); p.add(oldP);
-        p.add(new JLabel("Nuova Password:")); p.add(newP);
-        p.add(new JLabel("Conferma Nuova:")); p.add(confP);
+        JPasswordField oldP = new JPasswordField(30);
+        JPasswordField newP = new JPasswordField(30);
+        JPasswordField confP = new JPasswordField(30);
 
-        int result = JOptionPane.showConfirmDialog(this, p, "Cambio Master Password", JOptionPane.OK_CANCEL_OPTION);
+        Font fieldFont = new Font("Arial", Font.PLAIN, 16);
+        char echoChar = '●';
+
+        autoConfiguraCampo(oldP, fieldFont, echoChar);
+        autoConfiguraCampo(newP, fieldFont, echoChar);
+        autoConfiguraCampo(confP, fieldFont, echoChar);
+
+        JPanel oldWrapper = creaPasswordWrapper(oldP);
+        JPanel newWrapper = creaPasswordWrapper(newP);
+        JPanel confWrapper = creaPasswordWrapper(confP);
+
+        JProgressBar bar = new JProgressBar(0, 4);
+        JLabel feed = new JLabel("Inserisci nuova password (max 100 caratteri)");
+        feed.setFont(new Font("Arial", Font.PLAIN, 11));
+
+        newP.getDocument().addDocumentListener(new DocumentListener()
+        {
+
+            public void insertUpdate(DocumentEvent e) { check(); }
+            public void removeUpdate(DocumentEvent e) { check(); }
+            public void changedUpdate(DocumentEvent e) { check(); }
+            private void check()
+            {
+
+                var res = Generator.analizzaPassword(new String(newP.getPassword()));
+                bar.setValue(res.score());
+                bar.setForeground(res.colore());
+                feed.setText(res.messaggio());
+                feed.setForeground(res.colore());
+
+            }
+
+        });
+
+        gbc.gridx = 0; gbc.gridy = 0; p.add(new JLabel("Password Attuale:"), gbc);
+        gbc.gridx = 1; p.add(oldWrapper, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 1; p.add(new JLabel("Nuova Password:"), gbc);
+        gbc.gridx = 1; p.add(newWrapper, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 2; p.add(bar, gbc);
+        gbc.gridx = 1; gbc.gridy = 3; p.add(feed, gbc);
+
+        gbc.gridx = 0; gbc.gridy = 4; p.add(new JLabel("Conferma Nuova:"), gbc);
+        gbc.gridx = 1; p.add(confWrapper, gbc);
+
+        int result = JOptionPane.showConfirmDialog(this, p, "Cambio Master Password", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
 
         if(result == JOptionPane.OK_OPTION)
         {
@@ -583,28 +719,12 @@ public class AppGUI extends JFrame
             try
             {
 
-                if(!java.util.Arrays.equals(vecchia, masterPassword))
-                {
-
-                    throw new Exception("La password attuale non è corretta.");
-
-                }
-
-                if(!java.util.Arrays.equals(nuova, conferma))
-                {
-
-                    throw new Exception("Le nuove password non coincidono.");
-
-                }
-                if(nuova.length < 8)
-                {
-
-                    throw new Exception("La nuova password è troppo debole (min 8 caratteri).");
-
-                }
+                if (nuova.length > 100) throw new Exception("Password troppo lunga.");
+                if (!java.util.Arrays.equals(vecchia, masterPassword)) throw new Exception("La password attuale non è corretta.");
+                if (!java.util.Arrays.equals(nuova, conferma)) throw new Exception("Le nuove password non coincidono.");
+                if (nuova.length < 8) throw new Exception("La nuova password è troppo debole (min 8 caratteri).");
 
                 GestoreIdentita.cambiaMasterPassword(db, vecchia, nuova, conferma, masterPassword);
-
                 GestoreIdentita.pulisciPassword(masterPassword);
                 masterPassword = nuova;
 
@@ -629,6 +749,29 @@ public class AppGUI extends JFrame
 
     }
 
+    // Metodi di supporto da aggiungere alla classe per pulizia del codice
+    private void autoConfiguraCampo(JPasswordField f, Font font, char echo) {
+        f.setFont(font);
+        f.setEchoChar(echo);
+    }
+
+    private JPanel creaPasswordWrapper(JPasswordField field) {
+        JButton btn = new JButton("vedi");
+        btn.setFocusable(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        char originalEcho = field.getEchoChar();
+
+        btn.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mousePressed(java.awt.event.MouseEvent e) { field.setEchoChar((char) 0); }
+            public void mouseReleased(java.awt.event.MouseEvent e) { field.setEchoChar(originalEcho); }
+        });
+
+        JPanel wrapper = new JPanel(new BorderLayout(5, 0));
+        wrapper.add(field, BorderLayout.CENTER);
+        wrapper.add(btn, BorderLayout.EAST);
+        return wrapper;
+    }
+
     private void sincronizzaListeContatti()
     {
 
@@ -647,8 +790,37 @@ public class AppGUI extends JFrame
 
     }
 
-    public static void main(String[] args) {
-        try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) {}
-        SwingUtilities.invokeLater(() -> new AppGUI().setVisible(true));
+    public static void main(String[] args)
+    {
+
+
+        try
+        {
+
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+
+        }
+        catch(Exception ignored)
+        {}
+
+        SwingUtilities.invokeLater(() ->
+        {
+
+            if(!GestoreIdentita.esisteDatabase())
+            {
+
+                new PrimoAvvio().setVisible(true);
+
+            }
+            else //lancio normale
+            {
+
+                new AppGUI().setVisible(true);
+
+            }
+
+        });
+
     }
+
 }

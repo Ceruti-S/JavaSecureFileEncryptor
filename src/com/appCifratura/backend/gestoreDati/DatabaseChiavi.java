@@ -1,18 +1,24 @@
 package com.appCifratura.backend.gestoreDati;
 
-import java.io.Serializable;
-import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.util.HashMap;
 
-public class DatabaseChiavi implements Serializable
+public class DatabaseChiavi
 {
 
-    private static final long serialVersionUID = 1L;
+    //ogni volta che aggiungi campi, aumenta questo numero
+    public int versione = 1;
 
-    public PrivateKey miaChiavePrivata;
-    public PublicKey miaChiavePubblica;
+    public byte[] miaChiavePrivata;
+    public byte[] miaChiavePubblica;
 
-    public HashMap<String, PublicKey> rubricaContatti = new HashMap<>();
+    public HashMap<String, byte[]> rubricaContatti = new HashMap<>();
+
+    public DatabaseChiavi()
+    {
+
+        //anche qua da incrementare
+        this.versione = 1;
+
+    }
 
 }
