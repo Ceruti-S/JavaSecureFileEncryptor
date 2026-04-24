@@ -6,13 +6,11 @@
 
     <groupId>com.appCifratura</groupId>
     <artifactId>SecureVault</artifactId>
-    <version>1.1-SNAPSHOT</version>
-
-    <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
+    <version>1.1.0</version> <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+</properties>
 
     <dependencies>
         <dependency>
@@ -29,6 +27,7 @@
     </dependencies>
 
     <build>
+        <finalName>Cifratore</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -37,7 +36,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.passwordGenerator.backend.Generator</mainClass>
+                            <mainClass>com.appCifratura.INSERISCI_QUI_IL_NOME_DELLA_CLASSE_MAIN</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
