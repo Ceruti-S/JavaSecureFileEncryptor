@@ -8,9 +8,9 @@ import java.util.Arrays;
 public class SecureDelete
 {
 
-    private static final int BUFFER_SIZE = 4 * 1024 * 1024;
+    private static final int BUFFER_SIZE = 5 * 1024 * 1024;
 
-    private static final int OVERWRITE_PASSES = 4;
+    private static final int OVERWRITE_PASSES = 5;
 
     public static void eseguiSecureDelete(File file) throws Exception
     {

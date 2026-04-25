@@ -27,6 +27,7 @@ public class GestoreIdentita
     private static final String NOME_FILE_DB_BASE = "wallet.db";
 
     private static final String PERCORSO_COMPLETO = getPathSorgente() + File.separator + NOME_FILE_DB_BASE;
+    private static final String PATH_LOG_TEMP = getPathSorgente() + File.separator + "access_attempts.log";
 
     private static String getPathSorgente()
     {
@@ -223,9 +224,36 @@ public class GestoreIdentita
             Gson gson = new Gson();
             DatabaseChiavi db = gson.fromJson(json, DatabaseChiavi.class);
 
+            if(db.versione < 2)
+            {
+
+                migraDatabase(db, password);
+
+            }
+
             return db;
 
         }
+
+    }
+
+    private static void migraDatabase(DatabaseChiavi db, char[] password) throws Exception
+    {
+
+        System.out.println("Migrazione database dalla versione " + db.versione + " alla versione 2...");
+
+        if(db.logAttivita == null)
+        {
+
+            db.logAttivita = new java.util.ArrayList<>();
+
+        }
+
+        registraEvento(db, "Database aggiornato con successo alla v2", password);
+
+        db.versione = 2;
+
+        salvaDatabase(db, password);
 
     }
 
@@ -264,6 +292,88 @@ public class GestoreIdentita
         }
 
         salvaDatabase(db, nuovaPassword);
+
+    }
+
+    public static void logTentativoFallito()
+    {
+
+        try
+        {
+
+            String timestamp = java.time.LocalDateTime.now()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"));
+            String logEntry = "(" + timestamp + ") ATTENZIONE: Tentativo di accesso fallito.\n";
+
+            java.nio.file.Files.writeString(
+                    java.nio.file.Paths.get(PATH_LOG_TEMP),
+                    logEntry,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND
+            );
+
+        }
+        catch(java.io.IOException e)
+        {
+
+            System.err.println("Errore scrittura log audit.");
+
+        }
+    }
+
+    public static void importaLogTemporanei(DatabaseChiavi db)
+    {
+
+        java.io.File tempFile = new java.io.File(PATH_LOG_TEMP);
+        if(tempFile.exists())
+        {
+
+            try
+            {
+
+                java.util.List<String> righe = java.nio.file.Files.readAllLines(tempFile.toPath());
+                for(String riga : righe)
+                {
+
+                    if(!riga.isBlank())
+                        db.aggiungiLog(riga.trim());
+
+                }
+                java.nio.file.Files.delete(tempFile.toPath());
+
+            }
+            catch(java.io.IOException e)
+            {
+
+                System.err.println("Errore importazione log.");
+
+            }
+
+        }
+
+    }
+
+    public static void registraEvento(DatabaseChiavi db, String evento, char[] password)
+    {
+
+        if(db != null)
+        {
+
+            db.aggiungiLog(evento);
+            try
+            {
+
+                salvaDatabase(db, password);
+
+            }
+            catch(Exception e)
+            {
+
+                System.err.println("Errore durante il salvataggio del log: " + e.getMessage());
+
+            }
+
+        }
 
     }
 

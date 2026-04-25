@@ -70,6 +70,7 @@ public class AppGUI extends JFrame
         Runtime.getRuntime().addShutdownHook(new Thread(() ->
         {
 
+            GestoreIdentita.registraEvento(db, "Rilevata chiusura app.", masterPassword);
             System.out.println("Chiusura rilevata: avvio procedura di sicurezza...");
             GestoreIdentita.wipeDatiSensibili(db, masterPassword);
 
@@ -86,6 +87,8 @@ public class AppGUI extends JFrame
 
     private void lockApp()
     {
+
+        GestoreIdentita.registraEvento(db,"Tempo di inattività massimo raggiunto (3 minuti), L'app viene bloccata.", masterPassword);
 
         GestoreIdentita.pulisciPassword(masterPassword);
         masterPassword = null;
@@ -170,6 +173,8 @@ public class AppGUI extends JFrame
             {
 
                 db = GestoreIdentita.caricaDatabase(masterPassword);
+                GestoreIdentita.importaLogTemporanei(db);
+                GestoreIdentita.registraEvento(db, "Accesso utente con master password effettuato con successo.", masterPassword);
 
                 if(db.miaChiavePrivata == null)
                 {
@@ -181,6 +186,7 @@ public class AppGUI extends JFrame
                     db.miaChiavePubblica = kp.getPublic().getEncoded();
 
                     GestoreIdentita.salvaDatabase(db, masterPassword);
+                    GestoreIdentita.registraEvento(db, "Nuove chiavi RSA create (primo accesso).", masterPassword);
 
                 }
 
@@ -192,6 +198,7 @@ public class AppGUI extends JFrame
 
                 JOptionPane.showMessageDialog(null, "Password Errata o Database Corrotto!", "Errore Accesso", JOptionPane.ERROR_MESSAGE);
                 GestoreIdentita.pulisciPassword(masterPassword);
+                GestoreIdentita.logTentativoFallito();
                 return false;
 
             }
@@ -209,6 +216,7 @@ public class AppGUI extends JFrame
         tabbedPane.addTab("Cifra File", creaPannelloCifra());
         tabbedPane.addTab("Decifra File", creaPannelloDecifra());
         tabbedPane.addTab("Gestione Identità & Contatti", creaPannelloIdentita());
+        tabbedPane.addTab("Log Attività (cifrati)", creaPannelloLog());
         add(tabbedPane);
 
     }
@@ -332,14 +340,16 @@ public class AppGUI extends JFrame
                         try
                         {
 
-                            File risultato = get(); // Ottiene il file prodotto o lancia eccezione
+                            File risultato = get(); //ottiene il file prodotto o lancia eccezione
                             JOptionPane.showMessageDialog(AppGUI.this, "Operazione completata!");
+                            GestoreIdentita.registraEvento(db,"File " + risultato.getName() + " cifrato con successo.", masterPassword);
 
                         }
                         catch(Exception ex)
                         {
 
                             JOptionPane.showMessageDialog(AppGUI.this, "Errore: " + ex.getCause().getMessage());
+                            GestoreIdentita.registraEvento(db,"Errore nella cifratura di un file", masterPassword);
 
                         }
                         finally
@@ -462,12 +472,14 @@ public class AppGUI extends JFrame
 
                         get();
                         JOptionPane.showMessageDialog(AppGUI.this, "File decifrato con successo!");
+                        GestoreIdentita.registraEvento(db, "File decifrato con successo.", masterPassword);
 
                     }
                     catch(Exception ex)
                     {
 
                         JOptionPane.showMessageDialog(AppGUI.this, "Errore decifratura: " + ex.getCause().getMessage(), "Errore", JOptionPane.ERROR_MESSAGE);
+                        GestoreIdentita.registraEvento(db, "Errore nelle decifrazione di un file.", masterPassword);
 
                     }
                     finally
@@ -497,27 +509,42 @@ public class AppGUI extends JFrame
 
     }
 
-    private JPanel creaPannelloIdentita() {
+    private JPanel creaPannelloIdentita()
+    {
+
         JPanel panel = new JPanel(new BorderLayout(15, 15));
         panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
-        // --- SEZIONE SUPERIORE: GESTIONE MIA CHIAVE E PASSWORD ---
         JPanel topPanel = new JPanel(new GridLayout(3, 1, 10, 10));
         topPanel.setBorder(BorderFactory.createTitledBorder("Sicurezza e Identità"));
 
         JButton btnEsportaPubblica = new JButton("ESPORTA la mia Chiave Pubblica (.pub)");
-        btnEsportaPubblica.addActionListener(e -> {
+        btnEsportaPubblica.addActionListener(e ->
+        {
             JFileChooser saver = new JFileChooser();
             saver.setSelectedFile(new File("mia_chiave.pub"));
-            if (saver.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                try {
+            if (saver.showSaveDialog(this) == JFileChooser.APPROVE_OPTION)
+            {
+
+                try
+                {
+
                     String b64Key = Base64.getEncoder().encodeToString(db.miaChiavePubblica);
                     Files.writeString(saver.getSelectedFile().toPath(), b64Key);
                     JOptionPane.showMessageDialog(this, "Chiave esportata correttamente!");
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Errore: " + ex.getMessage());
+                    GestoreIdentita.registraEvento(db, "Chiave pubblica esportata con successo su file .pub.", masterPassword);
+
                 }
+                catch(Exception ex)
+                {
+
+                    JOptionPane.showMessageDialog(this, "Errore: " + ex.getMessage());
+                    GestoreIdentita.registraEvento(db, "Errore nell'esportazione della chiave pubblica su file .pub.", masterPassword);
+
+                }
+
             }
+
         });
 
         JButton btnCambiaPassword = new JButton("CAMBIA Master Password");
@@ -525,33 +552,46 @@ public class AppGUI extends JFrame
 
         JButton btnRigeneraIdentita = new JButton("RIGENERA Identità (RSA 4096)");
         btnRigeneraIdentita.setForeground(Color.RED);
-        btnRigeneraIdentita.addActionListener(e -> {
+        btnRigeneraIdentita.addActionListener(e ->
+        {
+
             int conferma = JOptionPane.showConfirmDialog(this,
                     "ATTENZIONE: Rigenerando l'identità, tutti i file cifrati con la chiave attuale\n" +
                             "diventeranno IMPOSSIBILI da decifrare. Vuoi procedere?",
                     "Pericolo Perdita Dati", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 
-            if (conferma == JOptionPane.YES_OPTION) {
-                try {
+            if(conferma == JOptionPane.YES_OPTION)
+            {
+
+                try
+                {
+
                     KeyPair kp = GestoreIdentita.generaNuovaIdentita();
                     db.miaChiavePrivata = kp.getPrivate().getEncoded();
                     db.miaChiavePubblica = kp.getPublic().getEncoded();
                     GestoreIdentita.salvaDatabase(db, masterPassword);
                     JOptionPane.showMessageDialog(this, "Nuova identità generata e salvata.");
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Errore: " + ex.getMessage());
+                    GestoreIdentita.registraEvento(db, "Nuove chiavi RSA create e salvate.", masterPassword);
+
                 }
+                catch(Exception ex)
+                {
+
+                    JOptionPane.showMessageDialog(this, "Errore: " + ex.getMessage());
+                    GestoreIdentita.registraEvento(db, "Errore nella creazione di nuove chiavi RSA.", masterPassword);
+
+                }
+
             }
+
         });
 
         topPanel.add(btnEsportaPubblica);
         topPanel.add(btnCambiaPassword);
         topPanel.add(btnRigeneraIdentita);
 
-        // --- SEZIONE CENTRALE: RUBRICA (AGGIUNGI + LISTA) ---
         JPanel centerPanel = new JPanel(new GridLayout(1, 2, 15, 0));
 
-        // 1. Sottopannello Aggiunta Contatto
         JPanel addPanel = new JPanel(new GridBagLayout());
         addPanel.setBorder(BorderFactory.createTitledBorder("Aggiungi Nuovo Contatto"));
         GridBagConstraints gbc = new GridBagConstraints();
@@ -563,20 +603,31 @@ public class AppGUI extends JFrame
         JButton btnCaricaChiave = new JButton("Scegli File .pub");
         final File[] fileChiaveContatto = {null};
 
-        btnCaricaChiave.addActionListener(e -> {
+        btnCaricaChiave.addActionListener(e ->
+        {
+
             JFileChooser opener = new JFileChooser();
-            if (opener.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            if(opener.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+            {
+
                 fileChiaveContatto[0] = opener.getSelectedFile();
                 lblFileChiave.setText(fileChiaveContatto[0].getName());
+
             }
+
         });
 
         JButton btnSalvaContatto = new JButton("Salva in Rubrica");
         btnSalvaContatto.addActionListener(e -> {
-            try {
+            try
+            {
+
                 String nome = txtNomeContatto.getText().trim();
-                if (nome.isEmpty() || fileChiaveContatto[0] == null) {
+                if(nome.isEmpty() || fileChiaveContatto[0] == null)
+                {
+
                     throw new IllegalArgumentException("Nome o File mancanti");
+
                 }
 
                 String b64Key = Files.readString(fileChiaveContatto[0].toPath()).replaceAll("\\s", "");
@@ -588,16 +639,23 @@ public class AppGUI extends JFrame
                 db.rubricaContatti.put(nome, pubKey.getEncoded());
                 GestoreIdentita.salvaDatabase(db, masterPassword);
 
-                // Sincronizza le liste grafiche
                 sincronizzaListeContatti();
 
                 JOptionPane.showMessageDialog(this, "Contatto '" + nome + "' aggiunto!");
+                GestoreIdentita.registraEvento(db, "Nuovo contatto '" + nome + "' aggiunto con successo alla rubrica.", masterPassword);
                 txtNomeContatto.setText("");
                 lblFileChiave.setText("Nessun file selezionato");
                 fileChiaveContatto[0] = null;
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Errore: Chiave non valida.", "Errore", JOptionPane.ERROR_MESSAGE);
+
             }
+            catch(Exception ex)
+            {
+
+                JOptionPane.showMessageDialog(this, "Errore: Chiave non valida.", "Errore", JOptionPane.ERROR_MESSAGE);
+                GestoreIdentita.registraEvento(db, "Errore nel salvataggio di un contatto nella rubrica.", masterPassword);
+
+            }
+
         });
 
         gbc.gridx = 0; gbc.gridy = 0; addPanel.add(new JLabel("Nome:"), gbc);
@@ -606,7 +664,6 @@ public class AppGUI extends JFrame
         gbc.gridx = 1; addPanel.add(lblFileChiave, gbc);
         gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; addPanel.add(btnSalvaContatto, gbc);
 
-        // 2. Sottopannello Lista e Rimozione
         JPanel listPanel = new JPanel(new BorderLayout(10, 10));
         listPanel.setBorder(BorderFactory.createTitledBorder("Contatti Salvati"));
 
@@ -614,39 +671,99 @@ public class AppGUI extends JFrame
         JScrollPane scrollPane = new JScrollPane(listaGraficaContatti);
 
         JButton btnEliminaContatto = new JButton("Elimina Contatto Selezionato");
-        btnEliminaContatto.addActionListener(e -> {
+        btnEliminaContatto.addActionListener(e ->
+        {
+
             String selezionato = listaGraficaContatti.getSelectedValue();
-            if (selezionato != null) {
+            if(selezionato != null)
+            {
+
                 int confermi = JOptionPane.showConfirmDialog(this, "Eliminare " + selezionato + "?", "Conferma", JOptionPane.YES_NO_OPTION);
-                if (confermi == JOptionPane.YES_OPTION) {
+                if(confermi == JOptionPane.YES_OPTION)
+                {
+
                     db.rubricaContatti.remove(selezionato);
-                    try {
+                    try
+                    {
+
                         GestoreIdentita.salvaDatabase(db, masterPassword);
                         sincronizzaListeContatti();
-                    } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(this, "Errore nel salvataggio.");
+                        GestoreIdentita.registraEvento(db, "Contatto eliminato con successo.", masterPassword);
+
                     }
+                    catch(Exception ex)
+                    {
+
+                        JOptionPane.showMessageDialog(this, "Errore nel salvataggio.");
+                        GestoreIdentita.registraEvento(db, "Errore nell'eliminazione di un contatto.", masterPassword);
+
+                    }
+
                 }
+
             }
+
         });
 
         listPanel.add(scrollPane, BorderLayout.CENTER);
         listPanel.add(btnEliminaContatto, BorderLayout.SOUTH);
 
-        // Unione pannelli centrali
         centerPanel.add(addPanel);
         centerPanel.add(listPanel);
 
-        // Composizione finale
         panel.add(topPanel, BorderLayout.NORTH);
         panel.add(centerPanel, BorderLayout.CENTER);
 
-        // Popola le liste al caricamento
         sincronizzaListeContatti();
 
         return panel;
+
     }
 
+    private JPanel creaPannelloLog()
+    {
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.setBackground(new Color(30, 30, 30));
+
+        JLabel titolo = new JLabel("Log Attività (Cifrati)");
+        titolo.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titolo.setForeground(Color.WHITE);
+        panel.add(titolo, BorderLayout.NORTH);
+
+        String[] datiLog = (db != null && db.logAttivita != null)
+                ? db.logAttivita.toArray(new String[0])
+                : new String[]{"Nessun log disponibile"};
+
+        JList<String> listaLog = new JList<>(datiLog);
+        listaLog.setBackground(new Color(45, 45, 45));
+        listaLog.setForeground(new Color(0, 255, 100));
+        listaLog.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        listaLog.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JScrollPane scrollPane = new JScrollPane(listaLog);
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(100, 100, 100)));
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        JButton btnAggiorna = new JButton("Aggiorna Log");
+        btnAggiorna.addActionListener(e ->
+        {
+
+            if (db != null && db.logAttivita != null)
+            {
+
+                listaLog.setListData(db.logAttivita.toArray(new String[0]));
+
+            }
+
+        });
+
+        panel.add(btnAggiorna, BorderLayout.SOUTH);
+
+        return panel;
+
+    }
 
     private void mostraDialogoCambioPassword()
     {
@@ -729,12 +846,14 @@ public class AppGUI extends JFrame
                 masterPassword = nuova;
 
                 JOptionPane.showMessageDialog(this, "Master Password aggiornata con successo!");
+                GestoreIdentita.registraEvento(db,"Master password cambiata con successo.", masterPassword);
 
             }
             catch(Exception ex)
             {
 
                 JOptionPane.showMessageDialog(this, "Errore: " + ex.getMessage(), "Errore", JOptionPane.ERROR_MESSAGE);
+                GestoreIdentita.registraEvento(db, "Errore nel cambiare la master password.", masterPassword);
 
             }
             finally
@@ -749,13 +868,18 @@ public class AppGUI extends JFrame
 
     }
 
-    // Metodi di supporto da aggiungere alla classe per pulizia del codice
-    private void autoConfiguraCampo(JPasswordField f, Font font, char echo) {
+
+    private void autoConfiguraCampo(JPasswordField f, Font font, char echo)
+    {
+
         f.setFont(font);
         f.setEchoChar(echo);
+
     }
 
-    private JPanel creaPasswordWrapper(JPasswordField field) {
+    private JPanel creaPasswordWrapper(JPasswordField field)
+    {
+
         JButton btn = new JButton("vedi");
         btn.setFocusable(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -770,6 +894,7 @@ public class AppGUI extends JFrame
         wrapper.add(field, BorderLayout.CENTER);
         wrapper.add(btn, BorderLayout.EAST);
         return wrapper;
+
     }
 
     private void sincronizzaListeContatti()

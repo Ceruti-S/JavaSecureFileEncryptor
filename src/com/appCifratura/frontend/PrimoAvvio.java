@@ -22,7 +22,9 @@ public class PrimoAvvio extends JFrame {
     private final JLabel lblFeedback;
     private final JButton btnSuggerisci;
 
-    public PrimoAvvio() {
+    public PrimoAvvio()
+    {
+
         setTitle("SecureVault - Configurazione Iniziale");
         setSize(550, 500);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -38,7 +40,6 @@ public class PrimoAvvio extends JFrame {
         Font fieldFont = new Font("Arial", Font.PLAIN, 16);
         char echoChar = '●';
 
-        // --- PASSWORD PRINCIPALE ---
         gbc.gridx = 0; gbc.gridy = 0;
         mainPanel.add(new JLabel("Scegli la tua Master Password (min 8 caratteri):"), gbc);
 
@@ -47,7 +48,6 @@ public class PrimoAvvio extends JFrame {
         JPanel passWrapper = creaPasswordWrapper(passField);
         gbc.gridy = 1; mainPanel.add(passWrapper, gbc);
 
-        // --- BARRA SICUREZZA ---
         securityBar = new JProgressBar(0, 4);
         securityBar.setPreferredSize(new Dimension(100, 12));
         gbc.gridy = 2; mainPanel.add(securityBar, gbc);
@@ -59,7 +59,6 @@ public class PrimoAvvio extends JFrame {
         btnSuggerisci = new JButton("Genera una password sicura");
         gbc.gridy = 4; mainPanel.add(btnSuggerisci, gbc);
 
-        // --- CONFERMA ---
         gbc.gridy = 5; mainPanel.add(new JLabel("Conferma Password:"), gbc);
 
         confirmPassField = new JPasswordField(30);
@@ -67,7 +66,6 @@ public class PrimoAvvio extends JFrame {
         JPanel confWrapper = creaPasswordWrapper(confirmPassField);
         gbc.gridy = 6; mainPanel.add(confWrapper, gbc);
 
-        // --- PULSANTE CREAZIONE ---
         btnCreate = new JButton("CREA IL TUO WALLET");
         btnCreate.setFont(new Font("Arial", Font.BOLD, 14));
         btnCreate.setBackground(new Color(50, 120, 200));
@@ -83,37 +81,51 @@ public class PrimoAvvio extends JFrame {
         add(mainPanel, BorderLayout.CENTER);
         add(progressBar, BorderLayout.SOUTH);
 
-        // --- LOGICA LISTENER ---
-        passField.getDocument().addDocumentListener(new DocumentListener() {
+        passField.getDocument().addDocumentListener(new DocumentListener()
+        {
+
             public void insertUpdate(DocumentEvent e) { aggiorna(); }
             public void removeUpdate(DocumentEvent e) { aggiorna(); }
             public void changedUpdate(DocumentEvent e) { aggiorna(); }
-            private void aggiorna() {
+            private void aggiorna()
+            {
+
                 String p = new String(passField.getPassword());
                 var res = Generator.analizzaPassword(p);
                 securityBar.setValue(res.score());
                 securityBar.setForeground(res.colore());
                 lblFeedback.setText(res.messaggio());
                 lblFeedback.setForeground(res.colore());
+
             }
+
         });
 
-        btnSuggerisci.addActionListener(e -> {
+        btnSuggerisci.addActionListener(e ->
+        {
+
             String suggerita = Generator.generatePassword(30, true, true, true);
             passField.setText(suggerita);
             confirmPassField.setText(suggerita);
             JOptionPane.showMessageDialog(this, "Password generata con successo.\nCopiata automaticamente nei campi.");
+
         });
 
         btnCreate.addActionListener(e -> avviaInizializzazione());
+
     }
 
-    private void autoConfiguraCampo(JPasswordField f, Font font, char echo) {
+    private void autoConfiguraCampo(JPasswordField f, Font font, char echo)
+    {
+
         f.setFont(font);
         f.setEchoChar(echo);
+
     }
 
-    private JPanel creaPasswordWrapper(JPasswordField field) {
+    private JPanel creaPasswordWrapper(JPasswordField field)
+    {
+
         JButton btn = new JButton("vedi");
         btn.setFocusable(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -128,68 +140,101 @@ public class PrimoAvvio extends JFrame {
         wrapper.add(field, BorderLayout.CENTER);
         wrapper.add(btn, BorderLayout.EAST);
         return wrapper;
+
     }
 
-    private void avviaInizializzazione() {
+    private void avviaInizializzazione()
+    {
+
         char[] pass = passField.getPassword();
         char[] confirm = confirmPassField.getPassword();
 
-        if (pass.length > 100) {
+        if(pass.length > 100)
+        {
+
             JOptionPane.showMessageDialog(this, "Password troppo lunga (max 100).");
             return;
+
         }
 
-        if (validazione(pass, confirm)) {
+        if(validazione(pass, confirm))
+        {
+
             btnCreate.setEnabled(false);
             progressBar.setVisible(true);
 
-            // Operazione intensiva in un thread separato
-            new Thread(() -> {
-                try {
-                    // Generazione chiavi RSA
+            new Thread(() ->
+            {
+
+                try
+                {
+
                     KeyPair kp = GestoreIdentita.generaNuovaIdentita();
 
                     DatabaseChiavi nuovoDb = new DatabaseChiavi();
-                    // IMPORTANTE: Salviamo l'encoding (byte[]) non l'oggetto interfaccia
+
                     nuovoDb.miaChiavePrivata = kp.getPrivate().getEncoded();
                     nuovoDb.miaChiavePubblica = kp.getPublic().getEncoded();
 
-                    // Salvataggio su disco cifrato con la Master Password
-                    GestoreIdentita.salvaDatabase(nuovoDb, pass);
 
-                    // Pulizia array per sicurezza
+                    GestoreIdentita.salvaDatabase(nuovoDb, pass);
+                    GestoreIdentita.registraEvento(nuovoDb, "Identità del primo avvio creata con successo.", pass);
+
                     Arrays.fill(pass, '\0');
                     Arrays.fill(confirm, '\0');
 
-                    SwingUtilities.invokeLater(() -> {
+                    SwingUtilities.invokeLater(() ->
+                    {
+
                         JOptionPane.showMessageDialog(this, "Wallet creato con successo!");
                         this.dispose();
                         new AppGUI().setVisible(true);
+
                     });
 
-                } catch (Exception ex) {
+                }
+                catch(Exception ex)
+                {
+
                     ex.printStackTrace();
-                    SwingUtilities.invokeLater(() -> {
+                    SwingUtilities.invokeLater(() ->
+                    {
+
                         JOptionPane.showMessageDialog(this, "Errore durante la creazione: " + ex.getMessage());
                         btnCreate.setEnabled(true);
                         progressBar.setVisible(false);
+
                     });
+
                 }
+
             }).start();
+
         }
+
     }
 
-    private boolean validazione(char[] p1, char[] p2) {
-        if (p1.length < 8) {
+    private boolean validazione(char[] p1, char[] p2)
+    {
+
+        if(p1.length < 8)
+        {
+
             JOptionPane.showMessageDialog(this, "La password deve avere almeno 8 caratteri.");
             return false;
+
         }
 
-        if (!Arrays.equals(p1, p2)) {
+        if(!Arrays.equals(p1, p2))
+        {
+
             JOptionPane.showMessageDialog(this, "Le password non coincidono!");
             return false;
+
         }
 
         return true;
+
     }
+
 }
